@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useReducer } from "react";
+import { useEffect, useReducer } from "react";
 import Link from "next/link";
 import type { Routine } from "@/types/routine";
 import { getTotalRoutineSeconds, routineCategoryLabels } from "@/data/routines";
@@ -19,7 +19,6 @@ type PlayerState = {
 
 type PlayerAction =
   | { type: "toggle-running" }
-  | { type: "go-to-step"; stepIndex: number }
   | { type: "next" }
   | { type: "previous" }
   | { type: "restart" }
@@ -41,16 +40,6 @@ export function RoutinePlayer({ routine }: RoutinePlayerProps) {
           ...state,
           isRunning: !state.isRunning,
         };
-      case "go-to-step": {
-        const stepIndex = Math.min(Math.max(action.stepIndex, 0), totalSteps - 1);
-
-        return {
-          currentStepIndex: stepIndex,
-          remainingSeconds: routine.steps[stepIndex].seconds,
-          isRunning: state.isRunning,
-          isComplete: false,
-        };
-      }
       case "previous": {
         const stepIndex = Math.max(state.currentStepIndex - 1, 0);
 
@@ -126,15 +115,15 @@ export function RoutinePlayer({ routine }: RoutinePlayerProps) {
   const { currentStepIndex, isComplete, isRunning, remainingSeconds } = state;
 
   const currentStep = routine.steps[currentStepIndex];
-  const totalSeconds = useMemo(() => getTotalRoutineSeconds(routine), [routine]);
-  const completedSeconds = useMemo(() => {
-    const previousStepsSeconds = routine.steps
-      .slice(0, currentStepIndex)
-      .reduce((total, step) => total + step.seconds, 0);
-
-    return previousStepsSeconds + ((currentStep?.seconds ?? 0) - remainingSeconds);
-  }, [currentStep?.seconds, currentStepIndex, remainingSeconds, routine.steps]);
+  const totalSeconds = getTotalRoutineSeconds(routine);
+  const previousStepsSeconds = routine.steps
+    .slice(0, currentStepIndex)
+    .reduce((total, step) => total + step.seconds, 0);
+  const completedSeconds = previousStepsSeconds + ((currentStep?.seconds ?? 0) - remainingSeconds);
   const progressPercent = totalSeconds > 0 ? Math.min(100, (completedSeconds / totalSeconds) * 100) : 0;
+  const progressRing = `conic-gradient(#1e564e ${progressPercent}%, #dedede ${progressPercent}% 100%)`;
+  const hasStartedStep = remainingSeconds < currentStep.seconds;
+  const isImmersive = isRunning || hasStartedStep;
 
   useEffect(() => {
     if (!isRunning || isComplete) {
@@ -147,10 +136,6 @@ export function RoutinePlayer({ routine }: RoutinePlayerProps) {
 
     return () => window.clearInterval(interval);
   }, [isComplete, isRunning]);
-
-  function goToStep(stepIndex: number) {
-    dispatch({ type: "go-to-step", stepIndex });
-  }
 
   function handlePrevious() {
     dispatch({ type: "previous" });
@@ -166,29 +151,29 @@ export function RoutinePlayer({ routine }: RoutinePlayerProps) {
 
   if (isComplete) {
     return (
-      <main className="min-h-screen bg-[#f6f1e8] px-6 py-8 text-[#241f1a]">
+      <main className="min-h-screen bg-[#fef9ef] px-6 py-8 text-[#1d241f]">
         <section className="mx-auto flex min-h-[calc(100vh-4rem)] w-full max-w-5xl flex-col justify-center">
-          <div className="rounded-[8px] border border-[#decfb8] bg-[#fffaf1] p-8 shadow-sm">
-            <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[#8d6b42]">
+          <div className="rounded-[8px] border border-[#dbe3d4] bg-white/85 p-8 shadow-[0_24px_80px_rgba(30,86,78,0.10)] sm:p-12">
+            <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[#61756a]">
               Session complete
             </p>
-            <h1 className="mt-4 max-w-2xl text-4xl font-semibold tracking-normal text-[#241f1a] sm:text-5xl">
+            <h1 className="mt-4 max-w-3xl text-5xl font-semibold tracking-normal text-[#1e564e] sm:text-7xl">
               {routine.title}
             </h1>
-            <p className="mt-4 max-w-2xl text-lg leading-8 text-[#6f6252]">
-              Nice reset. Take one easy breath before you sit back down.
+            <p className="mt-5 max-w-2xl text-xl leading-8 text-[#59665f]">
+              Take one easy breath before you return to your desk.
             </p>
-            <div className="mt-8 flex flex-wrap gap-3">
+            <div className="mt-9 flex flex-wrap gap-3">
               <button
                 type="button"
                 onClick={handleRestart}
-                className="h-12 rounded-[8px] bg-[#1f5d55] px-5 text-sm font-semibold text-white transition hover:bg-[#174941]"
+                className="h-14 rounded-[8px] bg-[#1e564e] px-7 text-base font-semibold text-white transition hover:bg-[#174941]"
               >
                 Run again
               </button>
               <Link
                 href="/"
-                className="flex h-12 items-center rounded-[8px] border border-[#d7c8b4] px-5 text-sm font-semibold text-[#3c3228] transition hover:bg-[#f1e5d2]"
+                className="flex h-14 items-center rounded-[8px] border border-[#cfdacf] px-7 text-base font-semibold text-[#1e564e] transition hover:bg-[#edf4ea]"
               >
                 Back home
               </Link>
@@ -200,126 +185,136 @@ export function RoutinePlayer({ routine }: RoutinePlayerProps) {
   }
 
   return (
-    <main className="min-h-screen bg-[#f6f1e8] px-4 py-5 text-[#241f1a] sm:px-6 lg:px-8">
-      <section className="mx-auto grid min-h-[calc(100vh-2.5rem)] w-full max-w-6xl grid-rows-[auto_1fr_auto] gap-5">
-        <header className="flex flex-wrap items-center justify-between gap-3">
-          <Link href="/" className="text-sm font-semibold text-[#5e4b36] hover:text-[#241f1a]">
-            9to5 Stretch
+    <main className="h-screen overflow-hidden bg-[#fef9ef] px-4 py-3 text-[#1d241f]">
+      <section className="mx-auto grid h-full w-full max-w-7xl grid-rows-[44px_minmax(0,1fr)_86px] gap-3">
+        <header className="grid grid-cols-[48px_1fr_120px] items-center border-b border-[#ece7dd]">
+          <Link
+            href="/"
+            aria-label="Back home"
+            className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-2xl font-semibold text-[#9b9b9b] shadow-[0_4px_18px_rgba(0,0,0,0.12)] transition hover:text-[#1d241f]"
+          >
+            x
           </Link>
-          <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-[#8d6b42]">
-            <span>{routineCategoryLabels[routine.category]}</span>
-            <span aria-hidden="true">/</span>
-            <span>{routine.durationMinutes} min</span>
+          <p className="text-center text-3xl font-black leading-none text-[#1d241f]">
+            {currentStepIndex + 1} of {totalSteps}
+          </p>
+          <div className="flex justify-end">
+            <div className="rounded-full bg-white px-3 py-2 text-xs font-black uppercase tracking-[0.12em] text-[#1e564e] shadow-[0_4px_18px_rgba(0,0,0,0.10)]">
+              Gesture off
+            </div>
           </div>
         </header>
 
-        <div className="grid gap-5 lg:grid-cols-[1fr_380px]">
-          <section className="flex min-h-[520px] flex-col rounded-[8px] border border-[#decfb8] bg-[#fffaf1] p-5 shadow-sm sm:p-7">
-            <div className="flex flex-wrap items-start justify-between gap-4">
-              <div>
-                <p className="text-sm font-semibold text-[#8d6b42]">
-                  Step {currentStepIndex + 1} of {totalSteps}
-                </p>
-                <h1 className="mt-2 text-3xl font-semibold tracking-normal text-[#241f1a] sm:text-5xl">
-                  {currentStep.title}
-                </h1>
+        <div
+          className={`grid min-h-0 items-center gap-5 ${
+            isImmersive ? "lg:grid-cols-[minmax(360px,0.95fr)_minmax(420px,1.05fr)]" : "lg:grid-cols-[minmax(420px,0.95fr)_minmax(420px,1.05fr)]"
+          }`}
+        >
+          <div className="flex min-h-0 items-center justify-center">
+            <div
+              className={`relative flex shrink-0 items-center justify-center rounded-full p-2 transition-all ${
+                isImmersive
+                  ? "h-[min(62vh,520px)] w-[min(62vh,520px)] min-h-[300px] min-w-[300px]"
+                  : "h-[min(66vh,560px)] w-[min(66vh,560px)] min-h-[330px] min-w-[330px]"
+              }`}
+              style={{ background: progressRing }}
+            >
+              <div className="absolute -top-1 left-1/2 z-10 flex h-12 w-12 -translate-x-1/2 items-center justify-center rounded-full bg-white text-xl font-black text-[#1d241f] shadow-[0_4px_16px_rgba(0,0,0,0.16)]">
+                {currentStepIndex + 1}
               </div>
-              <div className="rounded-[8px] border border-[#d8c8af] bg-white px-5 py-4 text-right">
-                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#8d6b42]">
-                  Timer
-                </p>
-                <p className="mt-1 font-mono text-5xl font-semibold text-[#1f5d55]">
-                  {formatTimer(remainingSeconds)}
-                </p>
-              </div>
-            </div>
-
-            <div className="mt-6 h-3 overflow-hidden rounded-full bg-[#eadcc8]">
-              <div
-                className="h-full rounded-full bg-[#1f5d55] transition-all duration-300"
-                style={{ width: `${progressPercent}%` }}
-              />
-            </div>
-
-            <div className="mt-8 grid flex-1 gap-7 lg:grid-cols-[1fr_280px]">
-              <div className="flex flex-col justify-center rounded-[8px] bg-[#f0e4d1] p-6">
-                <div className="mx-auto flex aspect-square w-full max-w-[320px] items-center justify-center rounded-full bg-[#d9eadf]">
-                  <div className="relative h-48 w-32">
-                    <div className="absolute left-1/2 top-2 h-14 w-14 -translate-x-1/2 rounded-full bg-[#f2c9a6]" />
-                    <div className="absolute left-1/2 top-16 h-24 w-20 -translate-x-1/2 rounded-[999px] bg-[#1f5d55]" />
-                    <div className="absolute left-3 top-20 h-20 w-5 origin-top rotate-[-28deg] rounded-full bg-[#f2c9a6]" />
-                    <div className="absolute right-3 top-20 h-20 w-5 origin-top rotate-[28deg] rounded-full bg-[#f2c9a6]" />
-                    <div className="absolute bottom-0 left-9 h-20 w-5 rounded-full bg-[#3c3228]" />
-                    <div className="absolute bottom-0 right-9 h-20 w-5 rounded-full bg-[#3c3228]" />
-                  </div>
+              <div className="relative flex h-full w-full items-center justify-center overflow-hidden rounded-full border-[10px] border-white bg-[#f5dfad]">
+                <div className="absolute bottom-[22%] h-[14%] w-[82%] bg-[#cf94a5]" />
+                <div className="relative h-[64%] w-[44%]">
+                  <div className="absolute left-[41%] top-[7%] h-[18%] w-[28%] rounded-full bg-[#7b3f22]" />
+                  <div className="absolute left-[30%] top-[20%] h-[40%] w-[42%] -rotate-12 rounded-[40%] bg-[#8dc89b]" />
+                  <div className="absolute left-[12%] top-[18%] h-[66%] w-[22%] rounded-full bg-[#24989a]" />
+                  <div className="absolute left-[27%] top-[70%] h-[9%] w-[29%] rounded-full bg-[#9d633e]" />
+                  <div className="absolute left-[64%] top-[38%] h-[46%] w-[15%] rounded-full bg-[#9d633e]" />
+                  <div className="absolute left-[66%] top-[80%] h-[8%] w-[26%] rounded-full bg-[#9d633e]" />
+                  <div className="absolute left-[62%] top-[22%] h-[18%] w-[22%] rounded-full bg-[#7b3f22]" />
                 </div>
               </div>
-
-              <aside className="flex flex-col justify-center">
-                <p className="text-sm font-semibold uppercase tracking-[0.14em] text-[#8d6b42]">
-                  Cue
-                </p>
-                <p className="mt-3 text-2xl font-semibold leading-9 text-[#241f1a]">
-                  {currentStep.cue}
-                </p>
-                <p className="mt-5 text-base leading-7 text-[#6f6252]">
-                  {currentStep.instruction}
-                </p>
-                <p className="mt-6 text-sm text-[#8a7a66]">
-                  Move gently and stop if anything feels painful.
-                </p>
-              </aside>
             </div>
-          </section>
+          </div>
 
-          <aside className="rounded-[8px] border border-[#decfb8] bg-[#fffaf1] p-5 shadow-sm">
-            <h2 className="text-lg font-semibold text-[#241f1a]">{routine.title}</h2>
-            <p className="mt-2 text-sm leading-6 text-[#6f6252]">{routine.summary}</p>
-
-            <div className="mt-6 space-y-2">
-              {routine.steps.map((step, index) => (
-                <button
-                  key={step.id}
-                  type="button"
-                  onClick={() => goToStep(index)}
-                  className={`w-full rounded-[8px] border px-4 py-3 text-left transition ${
-                    index === currentStepIndex
-                      ? "border-[#1f5d55] bg-[#e1efe8]"
-                      : "border-[#e3d5c1] bg-white hover:bg-[#f7ead7]"
-                  }`}
-                >
-                  <span className="block text-sm font-semibold text-[#241f1a]">{step.title}</span>
-                  <span className="mt-1 block text-xs text-[#786753]">
-                    {formatTimer(step.seconds)}
-                  </span>
-                </button>
-              ))}
+          <div className="min-w-0 text-center lg:text-left">
+            <p className="text-sm font-black uppercase tracking-[0.16em] text-[#7d8a81]">
+              {routineCategoryLabels[routine.category]} / {routine.durationMinutes} min
+            </p>
+            <div className="mt-3 flex items-center justify-center gap-2 lg:justify-start">
+              <h1 className="text-5xl font-black tracking-normal text-[#202020] xl:text-6xl">
+                {currentStep.title}
+              </h1>
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white text-sm font-black text-[#a3a3a3] shadow-[0_2px_10px_rgba(0,0,0,0.10)]">
+                i
+              </span>
             </div>
-          </aside>
+            <p className="mt-3 max-w-xl text-lg font-semibold leading-7 text-[#6c6c6c]">
+              {isImmersive ? currentStep.cue : currentStep.instruction}
+            </p>
+            <p
+              key={remainingSeconds}
+              className="slot-tick mt-5 font-mono text-[96px] font-black leading-none text-[#8f8f8f] sm:text-[128px] xl:text-[168px]"
+            >
+              {formatTimer(remainingSeconds)}
+            </p>
+            {!isImmersive ? (
+              <div className="mt-5 grid max-w-xl gap-3 text-left">
+                <div className="rounded-[8px] border border-[#e4e0d8] bg-white/80 p-4">
+                  <p className="text-xs font-black uppercase tracking-[0.14em] text-[#7d8a81]">
+                    Technique
+                  </p>
+                  <p className="mt-2 text-base font-semibold leading-6 text-[#303630]">
+                    {currentStep.cue}
+                  </p>
+                </div>
+                <div className="rounded-[8px] border border-[#e4e0d8] bg-white/80 p-4">
+                  <p className="text-xs font-black uppercase tracking-[0.14em] text-[#7d8a81]">
+                    Gesture Assist Beta
+                  </p>
+                  <p className="mt-2 text-sm leading-5 text-[#6c6c6c]">
+                    Hands-free controls will appear here later. Camera processing stays on-device.
+                  </p>
+                </div>
+              </div>
+            ) : null}
+          </div>
         </div>
 
-        <footer className="grid gap-3 rounded-[8px] border border-[#decfb8] bg-[#fffaf1] p-3 shadow-sm sm:grid-cols-[1fr_auto_1fr] sm:items-center">
+        <footer className="grid grid-cols-[1fr_auto_1fr] items-center gap-8 pb-1">
           <button
             type="button"
+            aria-label="Previous step"
             onClick={handlePrevious}
             disabled={currentStepIndex === 0}
-            className="h-12 rounded-[8px] border border-[#d7c8b4] px-5 text-sm font-semibold text-[#3c3228] transition hover:bg-[#f1e5d2] disabled:cursor-not-allowed disabled:opacity-45"
+            className="ml-auto flex h-16 w-16 items-center justify-center rounded-full bg-white text-[#202020] shadow-[0_10px_30px_rgba(0,0,0,0.14)] transition hover:scale-105 disabled:cursor-not-allowed disabled:opacity-35 sm:h-20 sm:w-20"
           >
-            Back
+            <span className="h-0 w-0 border-y-[11px] border-r-[16px] border-y-transparent border-r-current" />
+            <span className="-ml-1 h-0 w-0 border-y-[11px] border-r-[16px] border-y-transparent border-r-current" />
           </button>
           <button
             type="button"
+            aria-label={isRunning ? "Pause routine" : "Start routine"}
             onClick={() => dispatch({ type: "toggle-running" })}
-            className="h-14 rounded-[8px] bg-[#1f5d55] px-10 text-base font-semibold text-white transition hover:bg-[#174941]"
+            className="flex h-20 w-20 items-center justify-center rounded-full bg-white text-[#202020] shadow-[0_12px_34px_rgba(0,0,0,0.14)] transition hover:scale-105 sm:h-24 sm:w-24"
           >
-            {isRunning ? "Pause" : "Start"}
+            {isRunning ? (
+              <span className="flex gap-2">
+                <span className="h-9 w-3 rounded-full bg-current" />
+                <span className="h-9 w-3 rounded-full bg-current" />
+              </span>
+            ) : (
+              <span className="ml-1 h-0 w-0 border-y-[18px] border-l-[28px] border-y-transparent border-l-current" />
+            )}
           </button>
           <button
             type="button"
+            aria-label="Next step"
             onClick={handleNext}
-            className="h-12 rounded-[8px] border border-[#d7c8b4] px-5 text-sm font-semibold text-[#3c3228] transition hover:bg-[#f1e5d2]"
+            className="flex h-16 w-16 items-center justify-center rounded-full bg-white text-[#202020] shadow-[0_10px_30px_rgba(0,0,0,0.14)] transition hover:scale-105 sm:h-20 sm:w-20"
           >
-            {currentStepIndex === totalSteps - 1 ? "Finish" : "Next"}
+            <span className="h-0 w-0 border-y-[11px] border-l-[16px] border-y-transparent border-l-current" />
+            <span className="-ml-1 h-0 w-0 border-y-[11px] border-l-[16px] border-y-transparent border-l-current" />
           </button>
         </footer>
       </section>
